@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using LearnBotVrk.botApi;
+using LearnBotVrk.Telegram.BotAPI.Types;
 using LearnBotVrk.Telegram.Types;
 
 namespace LearnBotVrk.Telegram.BotAPI

@@ -5,6 +5,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using LearnBotVrk.botApi;
+using LearnBotVrk.Telegram.BotAPI.Types;
 using LearnBotVrk.Telegram.Types;
 using Newtonsoft.Json;
 
@@ -16,7 +17,7 @@ namespace LearnBotVrk.Telegram.BotAPI
         private Thread _worker;
         private IUpdateHandler _handler;
         private CancellationToken _cancellation;
-        private int _offset;
+        private long _offset;
         
         public Bot(string token)
         {
@@ -33,11 +34,11 @@ namespace LearnBotVrk.Telegram.BotAPI
                     var req = new BotExtensions.RequestWrapper(this, "getUpdates");
                     req.AddParam("offset", _offset);
 
-                    var t = req.GetResponse();
+                    var t = req.GetResponse<Update[]>();
                     foreach (var update in t.Result)
                     {
                         _handler.OnReceive(this, update, _cancellation);
-                        _offset = update.UpdateId + 1;
+                        _offset = update.Id + 1;
                     }
                 }
                 catch (Exception e)

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading;
-using LearnBotVrk.botApi;
 using LearnBotVrk.Telegram.BotAPI;
 using LearnBotVrk.Vkr;
 

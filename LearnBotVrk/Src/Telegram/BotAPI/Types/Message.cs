@@ -6,7 +6,7 @@ namespace LearnBotVrk.Telegram.Types
 {
     public class Message
     {
-        [JsonProperty("message_id")] private int MessageId { get; set; }
+        [JsonProperty("message_id")] public long Id { get; set; }
         [JsonProperty("text")] public string Text { get; set; }
         [JsonProperty("from")] public User From { get; set; }
         [JsonProperty("chat")] public Chat Chat { get; set; }
