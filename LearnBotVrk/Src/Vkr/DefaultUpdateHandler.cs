@@ -15,7 +15,7 @@ namespace LearnBotVrk.Vkr
         
         public async Task OnReceive(IBot bot, Update update, CancellationToken token)
         {
-
+            
         }
 
         public async Task OnException(IBot bot, Exception exception, CancellationToken token)

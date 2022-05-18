@@ -5,12 +5,10 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web;
 using LearnBotVrk.botApi;
 using LearnBotVrk.Telegram.BotAPI.Types;
 using LearnBotVrk.Telegram.Types;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 
 namespace LearnBotVrk.Telegram.BotAPI
 {
@@ -41,62 +39,73 @@ namespace LearnBotVrk.Telegram.BotAPI
 
             private readonly List<String> _parms;
             private readonly List<String> _vals;
-            
-            public RequestWrapper(IBot bot, string methodName)
+            private int _lastParamIdx;
+
+            private RequestWrapper(IBot bot, string methodName)
             {
+                _lastParamIdx = -1;
                 _token = bot.GetToken();
                 _methodName = methodName;
                 _parms = new List<string>();
                 _vals = new List<string>();
             }
 
-            public RequestWrapper AddJsonParam<T>(string param, T value)
+            private void WriteParam(string value)
             {
-                if (!_parms.Contains(param) && value != null)
+                _vals[_lastParamIdx + 1] = value;
+                ++_lastParamIdx;
+            }
+
+            public static RequestWrapper FromMethod(MethodBase methodBase, IBot bot)
+            {
+                var req = new RequestWrapper(bot, ApiMethod.Resolve(methodBase.Name));
+
+                foreach (var param in methodBase.GetParameters())
                 {
-                    _parms.Add(param);
-                    _vals.Add(JsonConvert.SerializeObject(value));
+                    var name = ApiParam.Resolve(param);
+                    if (name != null)
+                    {
+                        req._parms.Add(name);
+                        req._vals.Add(null);
+                    }
                 }
 
+                return req;
+            }
+
+            public RequestWrapper AddJsonParam<T>(T value)
+            {
+                WriteParam(value != null ? JsonConvert.SerializeObject(value) : null);
                 return this;
             }
 
-            private void AddParamImpl(string param, string value)
+            public RequestWrapper AddParam(int? value)
             {
-                if (!_parms.Contains(param) && value != null)
-                {
-                    _parms.Add(param);
-                    _vals.Add(value.ToString());
-                }
-            }
-
-            public RequestWrapper AddParam(string param, int? value)
-            {
-                AddParamImpl(param, value.ToString());
+                WriteParam(value?.ToString());
                 return this;
             }
 
-            public RequestWrapper AddParam(string param, long? value)
+            public RequestWrapper AddParam(long? value)
             {
-                AddParamImpl(param, value.ToString());
+                WriteParam(value?.ToString());
                 return this;
             }
             
-            public RequestWrapper AddParam(string param, Enum enumerator)
+            public RequestWrapper AddParam(Enum enumerator)
             {
-                AddParamImpl(param, enumerator.ToString().ToLowerInvariant());
+                WriteParam(enumerator?.ToString().ToLowerInvariant());
                 return this;
             }
 
-            public RequestWrapper AddParam(string param, string value)
+            public RequestWrapper AddParam(string value)
             {
-                AddParamImpl(param, value);
+                WriteParam(value);
                 return this;
             }
 
-            public RequestWrapper AddParam(string param, bool? value)
+            public RequestWrapper AddParam(bool? value)
             {
-                AddParamImpl(param, value.ToString());
+                WriteParam(value?.ToString());
                 return this;
             }
 
@@ -106,6 +115,19 @@ namespace LearnBotVrk.Telegram.BotAPI
             /// <returns>TelegramResponse object</returns>
             public TelegramResponse<T> GetResponse<T>()
             {
+                for (int i = 0; i < _parms.Count;)
+                {
+                    if (_vals[i] == null)
+                    {
+                        _vals.RemoveAt(i);
+                        _parms.RemoveAt(i);
+                    }
+                    else
+                    {
+                        ++i;
+                    }
+                }
+                
                 StringBuilder builder = new StringBuilder(_baseUrl);
                 builder.Append($"bot{_token}").Append('/');
                 builder.Append(_methodName);
@@ -126,130 +148,174 @@ namespace LearnBotVrk.Telegram.BotAPI
                 string apiString = builder.ToString();
                 var request = WebRequest.CreateHttp(apiString);
 
-                TelegramResponse<T> result = null;
-                using (var response = request.GetResponse())
-                {
-                    using (var responseStream = response.GetResponseStream())
-                    {
-                        if (responseStream == null) return null;
-                        
-                        string responseJson = new StreamReader(responseStream).ReadToEnd();
-                        result = JsonConvert.DeserializeObject<TelegramResponse<T>>(responseJson);
-                    }
-                }
-
-                return result;
+                using var response = request.GetResponse();
+                using var responseStream = response.GetResponseStream();
+                
+                if (responseStream == null) return null;
+                
+                string responseJson = new StreamReader(responseStream).ReadToEnd();
+                
+                return JsonConvert.DeserializeObject<TelegramResponse<T>>(responseJson);
             }
 
             public Task<T> GetResponseAndResult<T>(T fallback = default)
             {
                 var response = GetResponse<T>();
-                if (response.IsOk)
-                {
-                    return Task.FromResult(response.Result);
-                }
-
-                return Task.FromResult<T>(fallback);
+                return Task.FromResult(response.IsOk ? response.Result : fallback);
             }
         }
-
-        private class MethodName : Attribute
+        private class ApiMethod : Attribute
         {
             private String Name { get; }
 
-            public MethodName(String name)
+            public ApiMethod(String name)
             {
                 this.Name = name;
             }
 
-            public static string GetMethodName(string caller)
+            public static string Resolve(string caller)
             {
                 MethodBase method = typeof(BotExtensions).GetMethod(caller);
-                return method?.GetCustomAttribute<MethodName>()?.Name;
+                return method?.GetCustomAttribute<ApiMethod>()?.Name;
             }
         }
+        private class ApiParam : Attribute
+        {
+            private String Name { get; }
+
+            public ApiParam(String name)
+            {
+                this.Name = name;
+            }
+
+            public static string Resolve(ParameterInfo param)
+            {
+                return param?.GetCustomAttribute<ApiParam>()?.Name;
+            }
+        }
+
+        private static RequestWrapper GetMethodApiRequest(this MethodBase methodBase, IBot bot)
+        {
+            return RequestWrapper.FromMethod(methodBase, bot);
+        }
+
+        [ApiMethod("getUpdates")]
+        public static Task<Update[]> PollAsync(this IBot bot
+            , [ApiParam("offset")] long offset
+        )
+        {
+            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                .AddParam(offset)
+                .GetResponseAndResult<Update[]>();
+        }
         
-        [MethodName("sendMessage")]
+        [ApiMethod("sendMessage")]
         public static Task<Message> SendMessageAsync(this IBot bot
-            , Chat chat
-            , String text
-            , IReplyMarkup replyMarkup = null
+            , [ApiParam("chat_id")]Chat chat
+            , [ApiParam("text")] String text
+            , [ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
         )
         {
-            RequestWrapper req = new RequestWrapper(bot, MethodName.GetMethodName(nameof(SendMessageAsync)));
-            req.AddParam("chat_id", chat.Id)
-                .AddParam("text", text)
-                .AddJsonParam("reply_markup", replyMarkup);
-
-            return req.GetResponseAndResult<Message>();
+            return 
+                MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                .AddParam(chat.Id)
+                .AddParam(text)
+                .AddJsonParam(replyMarkup)
+                .GetResponseAndResult<Message>();
         }
 
-        [MethodName("sendPoll")]
+        [ApiMethod("sendPoll")]
         public static Task<Message> SendPollAsync(this IBot bot
-            , Chat chat, String question
-            , string[] options
-            , bool? anonymous = null
-            , Poll.Type? pollType = null
-            , bool? allowMultiple = null
-            , int? correctOption = null
-            , string explanation = null
-            , bool? protectContent = null
+            , [ApiParam("chat_id")] Chat chat
+            , [ApiParam("question")] String question
+            , [ApiParam("options")] string[] options
+            , [ApiParam("is_anonymous")] bool? anonymous = null
+            , [ApiParam("type")] Poll.Type? pollType = null
+            , [ApiParam("allow_multiple_answers")] bool? allowMultiple = null
+            , [ApiParam("correct_option_id")] int? correctOption = null
+            , [ApiParam("explanation")] string explanation = null
+            , [ApiParam("protect_content")] bool? protectContent = null
         )
         {
-            RequestWrapper req = new RequestWrapper(bot, MethodName.GetMethodName(nameof(SendPollAsync)));
-            req
-                .AddParam("chat_id", chat.Id)
-                .AddParam("question", question)
-                .AddJsonParam("options", options)
-                .AddParam("is_anonymous", anonymous)
-                .AddParam("type", pollType)
-                .AddParam("allow_multiple_answers", allowMultiple)
-                .AddParam("correct_option_id", correctOption)
-                .AddParam("explanation", explanation)
-                .AddParam("protect_content", protectContent);
-
-            return req.GetResponseAndResult<Message>();
+            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                .AddParam(chat.Id)
+                .AddParam(question)
+                .AddJsonParam(options)
+                .AddParam(anonymous)
+                .AddParam(pollType)
+                .AddParam(allowMultiple)
+                .AddParam(correctOption)
+                .AddParam(explanation)
+                .AddParam(protectContent)
+                .GetResponseAndResult<Message>();
         }
 
-        [MethodName("stopPoll")]
-        public static Task<Poll> StopPollAsync(this IBot bot, Chat chat, long messageId)
+        [ApiMethod("stopPoll")]
+        public static Task<Poll> StopPollAsync(this IBot bot
+            , [ApiParam("chat_id")] Chat chat
+            , [ApiParam("message_id")] long messageId
+        )
         {
-            RequestWrapper req = new RequestWrapper(bot, MethodName.GetMethodName(nameof(EditMessageTextAsync)));
-            req
-                .AddParam("chat_id", chat.Id)
-                .AddParam("message_id", messageId);
-
-            return req.GetResponseAndResult<Poll>();
+            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                .AddParam(chat.Id)
+                .AddParam(messageId)
+                .GetResponseAndResult<Poll>();
         }
 
-        [MethodName("deleteMessage")]
-        public static Task<bool> DeleteMessageAsync(this IBot bot, Chat chat, long messageId)
+        [ApiMethod("deleteMessage")]
+        public static Task<bool> DeleteMessageAsync(this IBot bot
+            , [ApiParam("chat_id")] Chat chat
+            , [ApiParam("message_id")] long messageId
+        )
         {
-            RequestWrapper req = new RequestWrapper(bot, MethodName.GetMethodName(nameof(EditMessageTextAsync)));
-            req
-                .AddParam("chat_id", chat.Id)
-                .AddParam("message_id", messageId);
-            
-            return req.GetResponseAndResult<bool>(false);
+            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                .AddParam(chat.Id)
+                .AddParam(messageId)
+                .GetResponseAndResult<bool>(false);
         }
 
-        [MethodName("editMessageText")]
+        [ApiMethod("editMessageText")]
         public static Task<Message> EditMessageTextAsync(this IBot bot
-            , Chat chat
-            , long messageId
-            , string messageText
-            ,
-            IReplyMarkup replyMarkup = null
+            , [ApiParam("chat_id")] Chat chat
+            , [ApiParam("message_id")] long messageId
+            , [ApiParam("text")] string messageText
+            , [ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
         )
         {
-            RequestWrapper req = new RequestWrapper(bot, MethodName.GetMethodName(nameof(EditMessageTextAsync)));
-            req
-                .AddParam("chat_id", chat.Id)
-                .AddParam("message_id", messageId)
-                .AddParam("text", messageText)
-                .AddJsonParam("reply_markup", replyMarkup);
+            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                .AddParam(chat.Id)
+                .AddParam(messageId)
+                .AddParam(messageText)
+                .AddJsonParam(replyMarkup)
+                .GetResponseAndResult<Message>();
+        }
 
-            return req.GetResponseAndResult<Message>();
+        [ApiMethod("sendContact")]
+        public static Task<Message> SendContactAsync(this IBot bot
+            , [ApiParam("chat_id")] Chat chat
+            , [ApiParam("phone_number")] String phoneNumber
+            , [ApiParam("first_name")] String firstName
+            , [ApiParam("last_name")] String lastName
+            , [ApiParam("vcard")] String vCard
+            , [ApiParam("disable_notification")] bool? silent = null
+            , [ApiParam("protect_content")] bool? protect = null
+            , [ApiParam("reply_to_message_id")] long? replyId = null
+            , [ApiParam("allow_sending_without_reply")] bool? forceReply = null
+            , [ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
+        )
+        {
+            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                .AddParam(chat.Id)
+                .AddParam(phoneNumber)
+                .AddParam(firstName)
+                .AddParam(lastName)
+                .AddParam(vCard)
+                .AddParam(silent)
+                .AddParam(protect)
+                .AddParam(replyId)
+                .AddParam(forceReply)
+                .AddJsonParam(replyMarkup)
+                .GetResponseAndResult<Message>();
         }
     }
 }

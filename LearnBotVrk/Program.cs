@@ -11,7 +11,7 @@ namespace LearnBotVrk
         {
             var token = Environment.GetEnvironmentVariable("token");
             Bot bot = new Bot(token);
-            
+
             bot.StartPolling(new DefaultUpdateHandler(), CancellationToken.None);
         }
     }

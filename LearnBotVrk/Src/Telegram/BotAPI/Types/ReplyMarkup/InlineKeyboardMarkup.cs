@@ -45,9 +45,9 @@ namespace LearnBotVrk.Telegram.BotAPI
                    }
                }
                 
-                var outMarkup = _keyboardMarkup;
-                _keyboardMarkup = null;
-                return outMarkup;
+               var outMarkup = _keyboardMarkup;
+               _keyboardMarkup = null;
+               return outMarkup;
             }
         }
 

@@ -24,26 +24,25 @@ namespace LearnBotVrk.Telegram.BotAPI
             _token = token;
             _offset = 0;
         }
-
-        private void Poll()
+        
+        private async void Poll()
         {
             while (!_cancellation.IsCancellationRequested)
             {
                 try
                 {
-                    var req = new BotExtensions.RequestWrapper(this, "getUpdates");
-                    req.AddParam("offset", _offset);
-
-                    var t = req.GetResponse<Update[]>();
-                    foreach (var update in t.Result)
+                    var req = await this.PollAsync(_offset);
+                    foreach (var update in req)
                     {
-                        _handler.OnReceive(this, update, _cancellation);
+                        _handler?.OnReceive(this, update, _cancellation);
                         _offset = update.Id + 1;
                     }
+                    
+                    Thread.Sleep(200);
                 }
                 catch (Exception e)
                 {
-                    _handler.OnException(this, e, _cancellation);
+                    _handler?.OnException(this, e, _cancellation);
                 }
             }
         }
