@@ -6,7 +6,7 @@ namespace LearnBotVrk.Telegram.BotAPI.Types
 {
     public class Update
     {
-        public enum Type
+        public enum Types
         {
             Message,
             CallbackQuery,
@@ -16,7 +16,7 @@ namespace LearnBotVrk.Telegram.BotAPI.Types
         [JsonProperty("update_id")]
         public long Id { get; set; }
 
-        public Type UpdateType { get; set; }
+        public Types Type { get; set; }
         
         [JsonProperty("message")]
         public Message Message { get; set; }
@@ -33,15 +33,15 @@ namespace LearnBotVrk.Telegram.BotAPI.Types
         {
             if (Message != null)
             {
-                UpdateType = Type.Message;
+                Type = Types.Message;
             }
             else if (Poll != null)
             {
-                UpdateType = Type.Poll;
+                Type = Types.Poll;
             }
             else if (CallbackQuery != null)
             {
-                UpdateType = Type.CallbackQuery;
+                Type = Types.CallbackQuery;
             }
         }
     }

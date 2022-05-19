@@ -9,15 +9,19 @@ namespace LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup
     {
         public class Button
         {
-            public Button(String text)
+            private Button(String text)
             {
                 this.Text = text;
             }
             
             public class PollType
             {
-                [JsonProperty("type")]
-                public String Type { get; set; }
+                private PollType()
+                {
+                    
+                }
+                
+                [JsonProperty("type")] public String Type { get; set; }
 
                 public static readonly PollType Quiz = new PollType() {Type = Poll.Type.Quiz.ToString().ToLowerInvariant() };
                 public static readonly PollType Regular = new PollType() { Type = Poll.Type.Regular.ToString().ToLowerInvariant() };
@@ -25,7 +29,29 @@ namespace LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup
             }
             
             [JsonProperty("text")] public String Text { get; set; }
-            [JsonProperty("request_poll", NullValueHandling = NullValueHandling.Ignore)] public PollType PollRequestType { get; set; }
+            [JsonProperty("request_contact", NullValueHandling = NullValueHandling.Ignore)] public bool? RequestContact;
+            [JsonProperty("request_poll", NullValueHandling = NullValueHandling.Ignore)] public PollType RequestPollType { get; set; }
+            
+            public static Button WithContactRequest(String text)
+            {
+                return new Button(text)
+                {
+                    RequestContact = true
+                };
+            }
+
+            public static Button WithPollRequest(String text, PollType type)
+            {
+                return new Button(text)
+                {
+                    RequestPollType = type
+                };
+            }
+
+            public static Button Default(String text)
+            {
+                return new Button(text);
+            }
         }
 
         public class Builder
@@ -51,18 +77,6 @@ namespace LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup
 
             public ReplyKeyboardMarkup Build()
             {
-                foreach (var row in _markup._buttons)
-                {
-                    foreach (var btn in row)
-                    {
-                        bool valid = true;
-                        if (!valid)
-                        {
-                            throw new Exception("Invalid Keyboard markup: only one optional field is allowed");
-                        }
-                    }
-                }
-
                 _markup._placeholder = Placeholder;
                 _markup._resizeKeyboard = ResizeKeyboard;
                 _markup._oneTimeKeyboard = OneTimeKeyboard;

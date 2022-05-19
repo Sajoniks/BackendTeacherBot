@@ -1,4 +1,4 @@
-﻿namespace LearnBotVrk.Telegram.BotAPI
+﻿namespace LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup
 {
     public interface IReplyMarkup
     {

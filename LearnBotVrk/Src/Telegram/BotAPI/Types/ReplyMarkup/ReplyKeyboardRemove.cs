@@ -10,5 +10,10 @@ namespace LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup
         {
             this._remove = remove;
         }
+
+        public static ReplyKeyboardRemove RemoveKeyboard()
+        {
+            return new ReplyKeyboardRemove(true);
+        }
     }
 }
