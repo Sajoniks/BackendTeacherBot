@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using LearnBotVrk.botApi;
+using System.Threading.Tasks;
 using LearnBotVrk.Telegram.BotAPI;
 using LearnBotVrk.Telegram.BotAPI.Types;
 using LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup;
-using LearnBotVrk.Telegram.Types;
 
 namespace LearnBotVrk.Vkr
 {
@@ -128,13 +127,13 @@ namespace LearnBotVrk.Vkr
             return _activeMarkup;
         }
 
-        public void Enter(Context context)
+        public Task Enter(Context context)
         {
             _onEnter?.Invoke(context);
-            context.Bot.SendMessageAsync(context.Chat, _enterMessage, GenerateMarkup());
+            return context.Bot.SendMessageAsync(context.Chat, _enterMessage, GenerateMarkup());
         }
 
-        public bool HandleUpdate(Context context)
+        public Task<bool> HandleUpdate(Context context)
         {
             var type = context.LastMessage.Type;
             var text = context.LastMessage.Text 
@@ -147,10 +146,10 @@ namespace LearnBotVrk.Vkr
                 var binding = _actionBinding[text];
                 var response = _actions[binding].Invoke(context);
                 response?.Invoke();
-                return true;
+                return Task.FromResult(true);
             }
 
-            return false;
+            return Task.FromResult(false);
         }
     }
 }

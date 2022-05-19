@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace LearnBotVrk.Vkr
 {
@@ -34,13 +35,15 @@ namespace LearnBotVrk.Vkr
             }
         }
 
-        public void EnterWindow(Window window, Context context)
+        private Task EnterWindow(Window window, Context context)
         {
             if (window != null)
             {
                 _windows.Push(window);
-                _windows.Peek().Enter(context);
+                return _windows.Peek().Enter(context);
             }
+
+            return Task.CompletedTask;
         }
 
         private class NewWindowResponse : Window.IActionResponse
@@ -65,14 +68,14 @@ namespace LearnBotVrk.Vkr
             return new NewWindowResponse(this, window);
         }
 
-        public void HandleCommand(string command, Context context)
+        public Task HandleCommandAsync(string command, Context context)
         {
-            EnterWindow(_bindings[command], context);
+            return EnterWindow(_bindings[command], context);
         }
 
-        public void HandleUpdate(Context context)
+        public Task<bool> HandleUpdateAsync(Context context)
         {
-            _windows.Peek()?.HandleUpdate(context);
+            return _windows.Peek()?.HandleUpdate(context);
         }
     }
 }

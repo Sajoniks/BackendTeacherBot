@@ -23,13 +23,19 @@ namespace LearnBotVrk.Vkr
             _windowMediator = new WindowMediator();
 
             _generalWindow = new Window.Builder("С чего начнем?")
-                .CreateActionOption(Window.Option.TextOption("Доступные курсы"), context => null)
+                .CreateActionOption(Window.Option.TextOption("Доступные курсы"), context =>
+                {
+                    // gather courses for user...
+                    return context.Bot.CreateBotMessageResponse("Доступные курсы:");
+                })
                 .CreateActionOption(Window.Option.TextOption("Профиль"), context => null)
                 .Build();
 
             _registrationWindow = new Window.Builder("Отлично! Чтобы продолжить, нужно зарегистрироваться. Ничего страшного, этот номер будет использоваться только как идентификатор.")
                 .CreateActionOption(Window.Option.ContactOption("Отправить номер"), context =>
                 {
+                    // register user...
+                    
                     return new Window.MergedResponse(
                         context.Bot.CreateBotMessageResponse("Успешная регистрация"),
                         _windowMediator.CreateWindowOpenResponse(_generalWindow)
@@ -64,11 +70,11 @@ namespace LearnBotVrk.Vkr
                 // Command
                 if (message.Type == Message.Types.Text && message.Text.StartsWith("/"))
                 {
-                    _windowMediator.HandleCommand(message.Text, ctx);
+                    await _windowMediator.HandleCommandAsync(message.Text, ctx);
                 }
                 else
                 {
-                    _windowMediator.HandleUpdate(ctx);
+                    await _windowMediator.HandleUpdateAsync(ctx);
                 }
             }
         }
