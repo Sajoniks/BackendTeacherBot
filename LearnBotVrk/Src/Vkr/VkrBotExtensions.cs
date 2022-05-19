@@ -17,10 +17,10 @@ namespace LearnBotVrk.Vkr
                 _text = text;
             }
 
-            public async void Invoke()
+            public void Invoke()
             {
                 var ctx = Context.Get();
-                await ctx.Bot.SendMessageAsync(ctx.Chat, _text);
+                ctx.Bot.SendMessageAsync(ctx.Chat, _text);
             }
         }
 
