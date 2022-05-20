@@ -22,8 +22,10 @@ namespace LearnBotVrk.Vkr
         }
       
         public Chat Chat { get; set; }
-        public Message LastMessage { get; set; }
+        public Message LastReceivedMessage { get; set; }
+        public Message LastSentMessage { get; set; }
         public IBot Bot { get; set; }
+        
         public User From { get; set; }
         public Update Update { get; set; }
     }

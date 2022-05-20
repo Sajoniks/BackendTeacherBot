@@ -35,15 +35,15 @@ namespace LearnBotVrk.Vkr
             }
         }
 
-        private Task EnterWindow(Window window, Context context)
+        private async Task<bool> EnterWindow(Window window, Context context)
         {
             if (window != null)
             {
                 _windows.Push(window);
-                return _windows.Peek().Enter(context);
+                await _windows.Peek().Enter(context);
+                return true;
             }
-
-            return Task.CompletedTask;
+            return false;
         }
 
         private class NewWindowResponse : Window.IActionResponse
@@ -57,9 +57,9 @@ namespace LearnBotVrk.Vkr
                 _window = window;
             }
             
-            public void Invoke()
+            public async void Invoke()
             {
-                _mediator.EnterWindow(_window, Context.Get());
+                await _mediator.EnterWindow(_window, Context.Get());
             }
         }
 
@@ -68,9 +68,12 @@ namespace LearnBotVrk.Vkr
             return new NewWindowResponse(this, window);
         }
 
-        public Task HandleCommandAsync(string command, Context context)
+        public async Task HandleCommandAsync(string command, Context context)
         {
-            return EnterWindow(_bindings[command], context);
+            if (await EnterWindow(_bindings[command], context))
+            {
+                _windows.Peek()?.HandleCommand(command, context);
+            }
         }
 
         public Task<bool> HandleUpdateAsync(Context context)

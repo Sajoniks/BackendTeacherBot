@@ -98,9 +98,9 @@ namespace LearnBotVrk.Telegram.BotAPI
                 return this;
             }
 
-            public RequestWrapper AddParam(string value)
+            public RequestWrapper AddParam(string value, string fallback = " ")
             {
-                WriteParam(value);
+                WriteParam(value ?? fallback);
                 return this;
             }
 

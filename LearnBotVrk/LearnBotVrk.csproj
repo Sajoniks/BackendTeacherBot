@@ -8,7 +8,6 @@
 
     <ItemGroup>
       <Folder Include="resources" />
-      <Folder Include="Src\Vkr\API" />
     </ItemGroup>
 
     <ItemGroup>

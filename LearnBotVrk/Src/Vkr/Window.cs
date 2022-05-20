@@ -127,16 +127,21 @@ namespace LearnBotVrk.Vkr
             return _activeMarkup;
         }
 
-        public Task Enter(Context context)
+        public async Task Enter(Context context)
         {
             _onEnter?.Invoke(context);
-            return context.Bot.SendMessageAsync(context.Chat, _enterMessage, GenerateMarkup());
+            context.LastSentMessage = await context.Bot.SendMessageAsync(context.Chat, _enterMessage, GenerateMarkup());
+        }
+
+        public Task<bool> HandleCommand(string command, Context context)
+        {
+            return Task.FromResult(false);
         }
 
         public Task<bool> HandleUpdate(Context context)
         {
-            var type = context.LastMessage.Type;
-            var text = context.LastMessage.Text 
+            var type = context.LastReceivedMessage.Type;
+            var text = context.LastReceivedMessage.Text 
                        ?? _actionType
                            .FirstOrDefault(p => p.Value == type)
                            .Key;
