@@ -16,7 +16,7 @@ namespace LearnBotVrk.Vkr.Windows
             var message = arg.Update.Message;
             var contact = message.Contact;
 
-            if (TeachApi.Users.RegisterUser(contact))
+            if (await TeachApi.Users.RegisterUser(contact))
             {
                 await arg.SendBotResponse("Успешная регистрация", ReplyKeyboardRemove.RemoveKeyboard());
                 FinishWindow(1);

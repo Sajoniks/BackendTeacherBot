@@ -43,7 +43,7 @@ namespace LearnBotVrk.Telegram.BotAPI
 
             public static TelegramConfigurableRequest FromMethod(MethodBase methodBase, IBot bot)
             {
-                var req = new TelegramConfigurableRequest(bot, Utility.ApiMethod.Resolve(methodBase.Name));
+                var req = new TelegramConfigurableRequest(bot, Utility.ApiMethod.Resolve(methodBase));
                 foreach (var param in methodBase.GetParameters())
                 {
                     var name = Utility.ApiParam.Resolve(param);
@@ -69,9 +69,9 @@ namespace LearnBotVrk.Telegram.BotAPI
                 return sb.ToString();
             }
 
-            public override Task<T> GetResponseAndResult<T>()
+            public override Task<T> GetResponseAndResult<T>(string methodType = "GET")
             {
-                var response = GetResponse<TelegramResponse<T>>();
+                var response = GetResponse<TelegramResponse<T>>(methodType);
                 return Task.FromResult( response.IsOk ? response.Result : default );
             }
         }

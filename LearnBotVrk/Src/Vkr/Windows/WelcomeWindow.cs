@@ -18,7 +18,7 @@ namespace LearnBotVrk.Vkr.Windows
 
         protected override void OnIntentResult(int resultCode)
         {
-            FinishWindow(1);
+            FinishWindow(resultCode);
         }
     }
 }

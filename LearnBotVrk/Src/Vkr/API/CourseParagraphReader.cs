@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using LearnBotVrk.Telegram.BotAPI;
 using LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup;
+using LearnBotVrk.Telegram.Types;
 
 namespace LearnBotVrk.Vkr.API
 {
@@ -57,10 +59,14 @@ namespace LearnBotVrk.Vkr.API
 
             return markupBuilder.Row(buttons.ToArray()).Build();
         }
-        
-        public CourseParagraphReader(CourseParagraph paragraph)
+
+        public static async Task<CourseParagraphReader> CreateReaderAsync(User user, CourseParagraph paragraph)
         {
-            var content = paragraph.GetParagraphText();
+            return new CourseParagraphReader(await TeachApi.Courses.GetParagraphTextAsync(user, paragraph));
+        }
+        
+        private CourseParagraphReader(string content)
+        {
             var size = content.Length;
 
             var indents = content.Split(new []{ "\n\n", "\r\n\r\n" }, StringSplitOptions.RemoveEmptyEntries);

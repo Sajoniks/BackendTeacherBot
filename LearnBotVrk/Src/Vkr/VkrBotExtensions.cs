@@ -1,10 +1,7 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using LearnBotVrk.botApi;
 using LearnBotVrk.Telegram.BotAPI;
 using LearnBotVrk.Telegram.BotAPI.Types;
-using LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup;
 using LearnBotVrk.Telegram.Types;
 using LearnBotVrk.Vkr.API;
 

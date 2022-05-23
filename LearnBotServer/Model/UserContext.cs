@@ -12,4 +12,6 @@ public class UserContext : DbContext
     }
 
     public DbSet<User> Users { get; set; }
+    public DbSet<UserCourse> UserCourses { get; set; }
+    public DbSet<UserProgress> Progresses { get; set; }
 }

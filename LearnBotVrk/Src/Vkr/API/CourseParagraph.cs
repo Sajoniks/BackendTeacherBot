@@ -1,14 +1,13 @@
 ﻿using System;
-using YamlDotNet.Serialization;
+using Newtonsoft.Json;
 
 namespace LearnBotVrk.Vkr.API
 {
     public class CourseParagraph
     {
-        [YamlIgnore]
-        public String Id { get; set; }
-        [YamlIgnore]
-        public CourseChapter Chapter { get; set; }
-        public String Title { get; set; }
+        [JsonProperty("id")] public String Id { get; set; }
+        [JsonProperty("title")] public String Title { get; set; }
+        [JsonProperty("completed")] public bool IsCompleted { get; set; }
+        [JsonIgnore] public CourseChapter Chapter { get; set; }
     }
 }

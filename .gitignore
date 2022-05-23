@@ -3,3 +3,6 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+.idea
+/LearnBotServer/botdb.db-shm
+/LearnBotServer/botdb.db-wal

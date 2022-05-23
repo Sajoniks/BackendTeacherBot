@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using LearnBotVrk.botApi;
@@ -106,8 +108,9 @@ namespace LearnBotVrk
                 }
             }
 
-            protected void AppendParameters(StringBuilder sb)
+            protected virtual void AppendParameters(StringBuilder sb)
             {
+                RemoveNullParameters();
                 if (_parms.Count > 0)
                 {
                     sb.Append("?");
@@ -127,13 +130,15 @@ namespace LearnBotVrk
             /// Build url and get response
             /// </summary>
             /// <returns>TelegramResponse object</returns>
-            public T GetResponse<T>()
+            public T GetResponse<T>(string methodType = "GET")
             {
                 RemoveNullParameters();
                 StringBuilder sb = new StringBuilder(_baseUrl);
                 
                 string apiString = BuildApiRequestUrl(sb);
                 var request = WebRequest.CreateHttp(apiString);
+                request.Method = methodType;
+                request.ServerCertificateValidationCallback += ServerCertificateValidationCallback;
 
                 using var response = request.GetResponse();
                 using var responseStream = response.GetResponseStream();
@@ -143,10 +148,16 @@ namespace LearnBotVrk
                 string responseJson = new StreamReader(responseStream).ReadToEnd();
                 return JsonConvert.DeserializeObject<T>(responseJson);
             }
-            
-            public virtual Task<T> GetResponseAndResult<T>()
+
+            // todo
+            protected virtual bool ServerCertificateValidationCallback(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslpolicyerrors)
             {
-                var response = GetResponse<T>();
+                return true;
+            }
+
+            public virtual Task<T> GetResponseAndResult<T>(string methodType = "GET")
+            {
+                var response = GetResponse<T>(methodType);
                 return Task.FromResult(response);
             }
         }
@@ -159,10 +170,9 @@ namespace LearnBotVrk
                 this.Name = name;
             }
 
-            public static string Resolve(string caller)
+            public static string Resolve(MethodBase methodBase)
             {
-                MethodBase method = typeof(BotExtensions).GetMethod(caller);
-                return method?.GetCustomAttribute<ApiMethod>()?.Name;
+                return methodBase?.GetCustomAttribute<ApiMethod>()?.Name;
             }
         }
         public class ApiParam : Attribute

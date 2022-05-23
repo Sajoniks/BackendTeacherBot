@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using YamlDotNet.Serialization;
 
 namespace LearnBotVrk.Vkr.API
 {
@@ -14,36 +13,36 @@ namespace LearnBotVrk.Vkr.API
         
         public class Question
         {
-            [YamlMember(Alias = "text")]
+
             public string Text { get; set; }
             
-            [YamlMember(Alias = "page")]
+
             public String ParagraphId { get; set; }
 
-            [YamlMember(Alias = "opts")]
+   
             public string[] OptionStrings { get; set; }
             
-            [YamlMember(Alias = "correct")]
+
             public int CorrectOptionId { get; set; }
             
-            [YamlIgnore]
+ 
             public string CorrectOption
             {
                 get => OptionStrings[CorrectOptionId - 1]; 
             }
 
-            [YamlIgnore] public CourseQuiz Quiz { get; set; }
+            public CourseQuiz Quiz { get; set; }
         }
 
-        [YamlMember(Alias = "quiz")]
+
         public List<Question> Questions { get; set;  }
         
-        [YamlIgnore]
+      
         public CourseChapter Chapter { get; set; }
 
 
-        [YamlIgnore] private int CorrectAnswers { get; set; }
-        [YamlIgnore] private List<int> InvalidAnswers { get; set; }
+       private int CorrectAnswers { get; set; }
+      private List<int> InvalidAnswers { get; set; }
 
         public void RegisterAnswer(Question question, string answer)
         {

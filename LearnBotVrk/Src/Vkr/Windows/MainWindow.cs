@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -68,7 +69,7 @@ namespace LearnBotVrk.Vkr.Windows
         protected override async Task OnEnter(UpdateContext ctx)
         {
             // check if user is registered.
-            if (TeachApi.Users.IsRegistered(ctx.Update.Message.From))
+            if (await TeachApi.Users.IsRegistered(ctx.Update.Message.From))
             {
                 await base.OnEnter(ctx);
             }
@@ -107,13 +108,12 @@ namespace LearnBotVrk.Vkr.Windows
                         var markupBuilder = new InlineKeyboardMarkup.Builder();
                         foreach (var par in _courseBrowser.Chapter.Paragraphs)
                         {
-                            bool completed = await TeachApi.Courses.IsParagraphCompleted(user, par.Value);
-                            allCompleted &= completed;
+                            allCompleted &= par.IsCompleted;
                             
                             markupBuilder.Row(new[]
                             {
                                 new InlineKeyboardMarkup.Button()
-                                    { Text = $"{(completed ? "✅" : "👉")} {par.Value.Title}", CallbackData = par.Key }
+                                    { Text = $"{(par.IsCompleted ? "✅" : "👉")} {par.Title}", CallbackData = par.Id }
                             });
                         }
 
@@ -167,7 +167,7 @@ namespace LearnBotVrk.Vkr.Windows
                         Chat chat = _editMessage.Chat;
                         await bot.DeleteMessageAsync(_editMessage.Chat, _editMessage.Id);
 
-                        _activeQuiz = _courseBrowser.Chapter.GetChapterQuiz();
+                        // _activeQuiz = _courseBrowser.Chapter.GetChapterQuiz();
                         if (_activeQuiz != null)
                         {
                             _currentState = WindowState.Quiz;
@@ -179,7 +179,7 @@ namespace LearnBotVrk.Vkr.Windows
                     }
                     
                     string paragraphId = cb.Data;
-                    if (_courseBrowser.SetParagraph(paragraphId))
+                    if (await _courseBrowser.SetParagraphAsync(paragraphId))
                     {
                         var reader = _courseBrowser.Reader;
                         
@@ -231,7 +231,7 @@ namespace LearnBotVrk.Vkr.Windows
                         builder.AppendLine("📕 Темы которые неплохо повторить:").AppendLine();
                         foreach (var par in totals.FailedParagraphs)
                         {
-                            builder.AppendLine($"👉 {_activeQuiz.Chapter.Paragraphs[par].Title}");
+                            builder.AppendLine($"👉 {_activeQuiz.Chapter.GetParagraph(par).Title}");
                         }
                     }
                     else
@@ -255,7 +255,7 @@ namespace LearnBotVrk.Vkr.Windows
         {
             // by default we load course
             // /course1
-            var courseBrowserTask = CourseBrowser.CreateCourseBrowserAsync(arg.Update.Message.Text);
+            var courseBrowserTask = CourseBrowser.CreateCourseBrowserAsync(arg.Update.Message.Text, arg.Update.Message.From);
             var responseMessage = await arg.SendBotResponse("Загрузка...");
 
             _courseBrowser = await courseBrowserTask;
@@ -264,9 +264,9 @@ namespace LearnBotVrk.Vkr.Windows
             {
                 // create keyboard
                 var markupBuilder = new InlineKeyboardMarkup.Builder();
-                foreach (var chap in _courseBrowser.Course.GetCourseChapters())
+                foreach (var chap in _courseBrowser.Course.Chapters)
                 {
-                    bool completed = await TeachApi.Courses.IsChapterCompleted(arg.Update.Message.From, chap);
+                    bool completed = chap.Paragraphs.All(p => p.IsCompleted);
                     
                     markupBuilder.Row(new[]
                     {
@@ -310,7 +310,7 @@ namespace LearnBotVrk.Vkr.Windows
 
                 foreach (var c in courses)
                 {
-                    bool completed = await TeachApi.Courses.IsCourseCompleted(arg.Update.Message.From, c);
+                    bool completed = false;
                     
                     builder.Append($"{(completed ? "✅": "👉")} \"{c.Title}\" - /{c.Id}");
                     builder.AppendLine().AppendLine();
