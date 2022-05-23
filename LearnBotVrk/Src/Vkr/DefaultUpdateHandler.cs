@@ -30,12 +30,12 @@ namespace LearnBotVrk.Vkr
                     }
                     else
                         await BotWindow.GetCurrentWindow().HandleCommand(bot, text, update);
-                }
-                else
-                {
-                    await BotWindow.GetCurrentWindow().HandleUpdate(bot, update);
+
+                    return;
                 }
             }
+            
+            await BotWindow.GetCurrentWindow().HandleUpdate(bot, update);
         }
 
         public async Task OnException(IBot bot, Exception exception, CancellationToken token)

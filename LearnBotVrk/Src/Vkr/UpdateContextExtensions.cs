@@ -10,7 +10,14 @@ namespace LearnBotVrk.Vkr
     {
         public static Task<Message> SendBotResponse(this UpdateContext context, string message, IReplyMarkup replyMarkup = null)
         {
-            return context.Bot.SendMessageAsync(context.Update.Message.Chat, message, replyMarkup);
+            var targetMessage = context.Update.Message ?? context.Update.CallbackQuery.Message;
+            return context.Bot.SendMessageAsync(targetMessage.Chat, message, replyMarkup);
+        }
+
+        public static Task<Message> EditMessage(this UpdateContext context, Message message, string text, IReplyMarkup replyMarkup = null)
+        {
+            var targetMessage = message;
+            return context.Bot.EditMessageTextAsync(targetMessage.Chat, targetMessage.Id, text, replyMarkup);
         }
     }
 }

@@ -31,214 +31,96 @@ namespace LearnBotVrk.Telegram.BotAPI
                 Result = default;
             }
         }
-        internal class RequestWrapper
+
+        public class TelegramConfigurableRequest : Utility.HttpConfigurableRequest
         {
-            private readonly String _token;
-            private readonly String _methodName;
+            private readonly string _token;
             
-            private static String _baseUrl = "https://api.telegram.org/";
-
-            private readonly List<String> _parms;
-            private readonly List<String> _vals;
-            private int _lastParamIdx;
-
-            private RequestWrapper(IBot bot, string methodName)
+            public TelegramConfigurableRequest(IBot bot, string methodName) : base("https://api.telegram.org/", methodName)
             {
-                _lastParamIdx = -1;
-                _token = bot.GetToken();
-                _methodName = methodName;
-                _parms = new List<string>();
-                _vals = new List<string>();
+                _token = bot?.GetToken();
             }
 
-            private void WriteParam(string value)
+            public static TelegramConfigurableRequest FromMethod(MethodBase methodBase, IBot bot)
             {
-                _vals[_lastParamIdx + 1] = value;
-                ++_lastParamIdx;
-            }
-
-            public static RequestWrapper FromMethod(MethodBase methodBase, IBot bot)
-            {
-                var req = new RequestWrapper(bot, ApiMethod.Resolve(methodBase.Name));
-
+                var req = new TelegramConfigurableRequest(bot, Utility.ApiMethod.Resolve(methodBase.Name));
                 foreach (var param in methodBase.GetParameters())
                 {
-                    var name = ApiParam.Resolve(param);
+                    var name = Utility.ApiParam.Resolve(param);
                     if (name != null)
                     {
-                        req._parms.Add(name);
-                        req._vals.Add(null);
+                        req.Parameters.Add(name);
+                        req.Values.Add(null);
                     }
                 }
 
                 return req;
             }
 
-            public RequestWrapper AddJsonParam<T>(T value)
+            protected override string BuildApiRequestUrl(StringBuilder sb)
             {
-                WriteParam(value != null ? JsonConvert.SerializeObject(value) : null);
-                return this;
+                // append token
+                sb.Append($"bot{_token}").Append("/");
+                // append method name
+                sb.Append(MethodName);
+                // append parameters
+                AppendParameters(sb);
+
+                return sb.ToString();
             }
 
-            public RequestWrapper AddParam(int? value)
+            public override Task<T> GetResponseAndResult<T>()
             {
-                WriteParam(value?.ToString());
-                return this;
-            }
-
-            public RequestWrapper AddParam(long? value)
-            {
-                WriteParam(value?.ToString());
-                return this;
-            }
-            
-            public RequestWrapper AddParam(Enum enumerator)
-            {
-                WriteParam(enumerator?.ToString().ToLowerInvariant());
-                return this;
-            }
-
-            public RequestWrapper AddParam(string value, string fallback = " ")
-            {
-                WriteParam(value ?? fallback);
-                return this;
-            }
-
-            public RequestWrapper AddParam(bool? value)
-            {
-                WriteParam(value?.ToString());
-                return this;
-            }
-
-            /// <summary>
-            /// Build url and get response
-            /// </summary>
-            /// <returns>TelegramResponse object</returns>
-            public TelegramResponse<T> GetResponse<T>()
-            {
-                for (int i = 0; i < _parms.Count;)
-                {
-                    if (_vals[i] == null)
-                    {
-                        _vals.RemoveAt(i);
-                        _parms.RemoveAt(i);
-                    }
-                    else
-                    {
-                        ++i;
-                    }
-                }
-                
-                StringBuilder builder = new StringBuilder(_baseUrl);
-                builder.Append($"bot{_token}").Append('/');
-                builder.Append(_methodName);
-                if (_parms.Count > 0)
-                {
-                    builder.Append("?");
-                    
-                    for (int i = 0; i < _parms.Count; ++i)
-                    {
-                        builder.AppendFormat("{0}={1}", _parms[i], _vals[i]);
-                        if (i + 1 < _parms.Count)
-                        {
-                            builder.Append('&');
-                        }
-                    }
-                }
-
-                string apiString = builder.ToString();
-                var request = WebRequest.CreateHttp(apiString);
-
-                using var response = request.GetResponse();
-                using var responseStream = response.GetResponseStream();
-                
-                if (responseStream == null) return null;
-                
-                string responseJson = new StreamReader(responseStream).ReadToEnd();
-                
-                return JsonConvert.DeserializeObject<TelegramResponse<T>>(responseJson);
-            }
-
-            public Task<T> GetResponseAndResult<T>(T fallback = default)
-            {
-                var response = GetResponse<T>();
-                return Task.FromResult(response.IsOk ? response.Result : fallback);
+                var response = GetResponse<TelegramResponse<T>>();
+                return Task.FromResult( response.IsOk ? response.Result : default );
             }
         }
-        private class ApiMethod : Attribute
+
+        public static TelegramConfigurableRequest GetTelegramMethodRequest(this MethodBase methodBase, IBot bot)
         {
-            private String Name { get; }
-
-            public ApiMethod(String name)
-            {
-                this.Name = name;
-            }
-
-            public static string Resolve(string caller)
-            {
-                MethodBase method = typeof(BotExtensions).GetMethod(caller);
-                return method?.GetCustomAttribute<ApiMethod>()?.Name;
-            }
-        }
-        private class ApiParam : Attribute
-        {
-            private String Name { get; }
-
-            public ApiParam(String name)
-            {
-                this.Name = name;
-            }
-
-            public static string Resolve(ParameterInfo param)
-            {
-                return param?.GetCustomAttribute<ApiParam>()?.Name;
-            }
+            return TelegramConfigurableRequest.FromMethod(methodBase, bot);
         }
 
-        private static RequestWrapper GetMethodApiRequest(this MethodBase methodBase, IBot bot)
-        {
-            return RequestWrapper.FromMethod(methodBase, bot);
-        }
-
-        [ApiMethod("getUpdates")]
+        [Utility.ApiMethod("getUpdates")]
         public static Task<Update[]> PollAsync(this IBot bot
-            , [ApiParam("offset")] long offset
+            , [Utility.ApiParam("offset")] long offset
         )
         {
-            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+            return MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
                 .AddParam(offset)
                 .GetResponseAndResult<Update[]>();
         }
         
-        [ApiMethod("sendMessage")]
+        [Utility.ApiMethod("sendMessage")]
         public static Task<Message> SendMessageAsync(this IBot bot
-            , [ApiParam("chat_id")]Chat chat
-            , [ApiParam("text")] String text
-            , [ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
+            , [Utility.ApiParam("chat_id")]Chat chat
+            , [Utility.ApiParam("text")] String text
+            , [Utility.ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
         )
         {
             return 
-                MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+                MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
                 .AddParam(chat.Id)
                 .AddParam(text)
                 .AddJsonParam(replyMarkup)
                 .GetResponseAndResult<Message>();
         }
 
-        [ApiMethod("sendPoll")]
+        [Utility.ApiMethod("sendPoll")]
         public static Task<Message> SendPollAsync(this IBot bot
-            , [ApiParam("chat_id")] Chat chat
-            , [ApiParam("question")] String question
-            , [ApiParam("options")] string[] options
-            , [ApiParam("is_anonymous")] bool? anonymous = null
-            , [ApiParam("type")] Poll.Type? pollType = null
-            , [ApiParam("allow_multiple_answers")] bool? allowMultiple = null
-            , [ApiParam("correct_option_id")] int? correctOption = null
-            , [ApiParam("explanation")] string explanation = null
-            , [ApiParam("protect_content")] bool? protectContent = null
+            , [Utility.ApiParam("chat_id")] Chat chat
+            , [Utility.ApiParam("question")] String question
+            , [Utility.ApiParam("options")] string[] options
+            , [Utility.ApiParam("is_anonymous")] bool? anonymous = null
+            , [Utility.ApiParam("type")] Poll.Type? pollType = null
+            , [Utility.ApiParam("allow_multiple_answers")] bool? allowMultiple = null
+            , [Utility.ApiParam("correct_option_id")] int? correctOption = null
+            , [Utility.ApiParam("explanation")] string explanation = null
+            , [Utility.ApiParam("protect_content")] bool? protectContent = null
+            , [Utility.ApiParam("open_period")] int? openPeriod = null
         )
         {
-            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+            return MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
                 .AddParam(chat.Id)
                 .AddParam(question)
                 .AddJsonParam(options)
@@ -248,42 +130,43 @@ namespace LearnBotVrk.Telegram.BotAPI
                 .AddParam(correctOption)
                 .AddParam(explanation)
                 .AddParam(protectContent)
+                .AddParam(openPeriod)
                 .GetResponseAndResult<Message>();
         }
 
-        [ApiMethod("stopPoll")]
+        [Utility.ApiMethod("stopPoll")]
         public static Task<Poll> StopPollAsync(this IBot bot
-            , [ApiParam("chat_id")] Chat chat
-            , [ApiParam("message_id")] long messageId
+            , [Utility.ApiParam("chat_id")] Chat chat
+            , [Utility.ApiParam("message_id")] long messageId
         )
         {
-            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+            return MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
                 .AddParam(chat.Id)
                 .AddParam(messageId)
                 .GetResponseAndResult<Poll>();
         }
 
-        [ApiMethod("deleteMessage")]
+        [Utility.ApiMethod("deleteMessage")]
         public static Task<bool> DeleteMessageAsync(this IBot bot
-            , [ApiParam("chat_id")] Chat chat
-            , [ApiParam("message_id")] long messageId
+            , [Utility.ApiParam("chat_id")] Chat chat
+            , [Utility.ApiParam("message_id")] long messageId
         )
         {
-            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+            return MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
                 .AddParam(chat.Id)
                 .AddParam(messageId)
-                .GetResponseAndResult<bool>(false);
+                .GetResponseAndResult<bool>();
         }
 
-        [ApiMethod("editMessageText")]
+        [Utility.ApiMethod("editMessageText")]
         public static Task<Message> EditMessageTextAsync(this IBot bot
-            , [ApiParam("chat_id")] Chat chat
-            , [ApiParam("message_id")] long messageId
-            , [ApiParam("text")] string messageText
-            , [ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
+            , [Utility.ApiParam("chat_id")] Chat chat
+            , [Utility.ApiParam("message_id")] long messageId
+            , [Utility.ApiParam("text")] string messageText
+            , [Utility.ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
         )
         {
-            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+            return MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
                 .AddParam(chat.Id)
                 .AddParam(messageId)
                 .AddParam(messageText)
@@ -291,21 +174,21 @@ namespace LearnBotVrk.Telegram.BotAPI
                 .GetResponseAndResult<Message>();
         }
 
-        [ApiMethod("sendContact")]
+        [Utility.ApiMethod("sendContact")]
         public static Task<Message> SendContactAsync(this IBot bot
-            , [ApiParam("chat_id")] Chat chat
-            , [ApiParam("phone_number")] String phoneNumber
-            , [ApiParam("first_name")] String firstName
-            , [ApiParam("last_name")] String lastName
-            , [ApiParam("vcard")] String vCard
-            , [ApiParam("disable_notification")] bool? silent = null
-            , [ApiParam("protect_content")] bool? protect = null
-            , [ApiParam("reply_to_message_id")] long? replyId = null
-            , [ApiParam("allow_sending_without_reply")] bool? forceReply = null
-            , [ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
+            , [Utility.ApiParam("chat_id")] Chat chat
+            , [Utility.ApiParam("phone_number")] String phoneNumber
+            , [Utility.ApiParam("first_name")] String firstName
+            , [Utility.ApiParam("last_name")] String lastName
+            , [Utility.ApiParam("vcard")] String vCard
+            , [Utility.ApiParam("disable_notification")] bool? silent = null
+            , [Utility.ApiParam("protect_content")] bool? protect = null
+            , [Utility.ApiParam("reply_to_message_id")] long? replyId = null
+            , [Utility.ApiParam("allow_sending_without_reply")] bool? forceReply = null
+            , [Utility.ApiParam("reply_markup")] IReplyMarkup replyMarkup = null
         )
         {
-            return MethodBase.GetCurrentMethod().GetMethodApiRequest(bot)
+            return MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
                 .AddParam(chat.Id)
                 .AddParam(phoneNumber)
                 .AddParam(firstName)
@@ -317,6 +200,24 @@ namespace LearnBotVrk.Telegram.BotAPI
                 .AddParam(forceReply)
                 .AddJsonParam(replyMarkup)
                 .GetResponseAndResult<Message>();
+        }
+
+        [Utility.ApiMethod("answerCallbackQuery")]
+        public static Task<bool> AnswerCallbackQuery(this IBot bot
+            , [Utility.ApiParam("callback_query_id")] string callbackQueryId
+            , [Utility.ApiParam("text")] string? text = null
+            , [Utility.ApiParam("show_alert")] bool? alert = null
+            , [Utility.ApiParam("url")] string? openUrl = null
+            , [Utility.ApiParam("cache_time")] int? cacheTime = null
+        )
+        {
+            return MethodBase.GetCurrentMethod().GetTelegramMethodRequest(bot)
+                .AddParam(callbackQueryId)
+                .AddParam(text)
+                .AddParam(alert)
+                .AddParam(openUrl)
+                .AddParam(cacheTime)
+                .GetResponseAndResult<bool>();
         }
     }
 }

@@ -136,6 +136,12 @@ namespace LearnBotVrk.Vkr.API
             Options = new List<Option>();
         }
 
+        protected virtual Task<bool> HandleGenericUpdate(UpdateContext arg)
+        {
+            return Task.FromResult(false);
+        }
+
+
         public async Task<bool> HandleUpdate(IBot bot, Update update)
         {
             var context = new UpdateContext(update, bot);
@@ -149,22 +155,37 @@ namespace LearnBotVrk.Vkr.API
                                         .FirstOrDefault(p => p.Value == messageType)
                                         .Key;
 
-                if (messageText != null && ActionTypes[messageText] == messageType)
+                if (messageText != null && ActionTypes.ContainsKey(messageText) && ActionTypes[messageText] == messageType)
                 {
                     var binding = ActionBindings[messageText];
                     var response = await Actions[binding].Invoke(context);
                     return response.IsHandled;
                 }
             }
-            return false;
+            {
+                return await HandleGenericUpdate(context);
+            }
         }
 
         public async Task<bool> HandleCommand(IBot bot, string command, Update update)
         {
             var context = new UpdateContext(update, bot);
-            var reply = await Commands[command].Invoke(context);
 
-            return reply.IsHandled;
+            CommandHandler handler = null;
+            if (Commands.ContainsKey(command))
+            {
+                handler = Commands[command];
+            } else if (Commands.ContainsKey("/"))
+            {
+                handler = Commands["/"];
+            }
+
+            if (handler != null)
+            {
+                var reply = await handler.Invoke(context);
+                return reply.IsHandled;
+            }
+            return false;
         }
 
         protected virtual async Task OnEnter(UpdateContext ctx)
@@ -191,6 +212,34 @@ namespace LearnBotVrk.Vkr.API
             ActionTypes.Add(option.OptionButton.Text, option.SupportedMessageType);
         }
 
+        protected void RemoveOption(string option)
+        {
+            var opt = Options.FirstOrDefault(o => o.OptionButton.Text == option);
+
+            if (opt != null)
+            {
+                ActionBindings.Remove(opt.OptionButton.Text);
+                ActionTypes.Remove(opt.OptionButton.Text);
+                var idx = Options.IndexOf(opt);
+                Options.RemoveAt(idx);
+                Actions.RemoveAt(idx);
+
+                for (int i = 0; i < Actions.Count(); ++i)
+                {
+                    var temp = Options[i];
+                    ActionBindings[temp.OptionButton.Text] = i;
+                }
+            }
+        }
+
+        protected void RemoveAllOptions()
+        {
+            ActionBindings.Clear();
+            Actions.Clear();
+            ActionTypes.Clear();
+            Options.Clear();
+        }
+        
         protected void CreateCommand(string command, CommandHandler action)
         {
             Commands.Add(command, action);

@@ -24,6 +24,9 @@ namespace LearnBotVrk.Telegram.BotAPI.Types
         [JsonProperty("poll")]
         public Poll Poll { get; set; }
         
+        [JsonProperty("poll_answer")]
+        public PollAnswer PollAnswer { get; set; }
+        
         [JsonProperty("callback_query")]
         public CallbackQuery CallbackQuery { get; set; }
 

@@ -2,6 +2,7 @@
 using System.Threading;
 using LearnBotVrk.Telegram.BotAPI;
 using LearnBotVrk.Vkr;
+using LearnBotVrk.Vkr.API;
 
 namespace LearnBotVrk
 {
@@ -9,6 +10,10 @@ namespace LearnBotVrk
     {
         static void Main(string[] args)
         {
+            var course = Resources.GetCourse("course1");
+            var chap = course.GetCourseChapter(1);
+            var quiz = chap.GetChapterQuiz();
+            
             var token = Environment.GetEnvironmentVariable("token");
             Bot bot = new Bot(token);
 

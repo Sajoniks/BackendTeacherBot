@@ -9,7 +9,7 @@ namespace LearnBotVrk.Telegram.BotAPI.Types
     {
         public class PollOption
         {
-            [JsonProperty("text")] public String text { get; set; }
+            [JsonProperty("text")] public String Text { get; set; }
             [JsonProperty("voter_count")] public int VotesCount { get; set; }
         }
         

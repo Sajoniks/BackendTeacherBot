@@ -1,35 +1,31 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using LearnBotVrk.botApi;
 using LearnBotVrk.Telegram.BotAPI;
+using LearnBotVrk.Telegram.BotAPI.Types;
 using LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup;
 using LearnBotVrk.Telegram.Types;
+using LearnBotVrk.Vkr.API;
 
 namespace LearnBotVrk.Vkr
 {
     public static class VkrBotExtensions
     {
-        private class BotMessageResponse : Window.IActionResponse
+        public static Task<Message> CreateQuiz(this IBot bot, Chat chat, CourseQuiz.Question question, int openPeriod = 25)
         {
-            private string _text;
-            private IReplyMarkup _markup;
-
-            public BotMessageResponse(string text, IReplyMarkup markup)
-            {
-                _text = text;
-                _markup = markup;
-            }
-
-            public async void Invoke()
-            {
-                var ctx = Context.Get();
-                ctx.LastSentMessage = await ctx.Bot.SendMessageAsync(ctx.Chat, _text, _markup);
-            }
-        }
-
-        public static Window.IActionResponse CreateBotMessageResponse(this IBot bot, String text, IReplyMarkup replyMarkup = null)
-        {
-            return new BotMessageResponse(text, replyMarkup);
+            return bot.SendPollAsync(
+                chat
+                , question: question.Text
+                , options: question.OptionStrings
+                , correctOption: question.CorrectOptionId - 1
+                , pollType: Poll.Type.Quiz
+                , anonymous: true
+                , allowMultiple: false
+                , openPeriod: openPeriod
+                , explanation: question.CorrectOption
+                , protectContent: true
+            );
         }
     }
 }
