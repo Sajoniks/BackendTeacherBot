@@ -10,14 +10,5 @@ namespace LearnBotVrk.Vkr.API
         [JsonProperty("id")] public string Id { get; set; }
         [JsonProperty("title")] public string Title { get; set; }
         [JsonProperty("chapters")] public Collection<CourseChapter> Chapters { get; set; }
-
-        [OnDeserialized]
-        internal void OnDeserialization(StreamingContext context)
-        {
-            foreach (var courseChapter in Chapters)
-            {
-                courseChapter.Course = this;
-            }
-        }
     }
 }

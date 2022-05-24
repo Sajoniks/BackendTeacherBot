@@ -69,6 +69,7 @@ namespace LearnBotVrk.Vkr.API
 
         protected Dictionary<String, Message.Types> ActionTypes { get; }
 
+        private List<Tuple<Update.Types, OptionHandler, Func<UpdateContext, bool>>> GenericHandlers { get; }
         private List<Option> Options { get; }
         private List<OptionHandler> Actions { get; }
         private Dictionary<string, CommandHandler> Commands { get; }
@@ -134,6 +135,7 @@ namespace LearnBotVrk.Vkr.API
             ActionBindings = new Dictionary<string, int>();
             Commands = new Dictionary<string, CommandHandler>();
             Options = new List<Option>();
+            GenericHandlers = new List<Tuple<Update.Types, CommandHandler, Func<UpdateContext, bool>>>();
         }
 
         protected virtual Task<bool> HandleGenericUpdate(UpdateContext arg)
@@ -162,9 +164,24 @@ namespace LearnBotVrk.Vkr.API
                     return response.IsHandled;
                 }
             }
+            else
             {
-                return await HandleGenericUpdate(context);
+                var handler = GenericHandlers
+                    .Where(l => l.Item1 == updateType)
+                    .Where(l => l.Item3?.Invoke(context) ?? true);
+
+                foreach (var tuple in handler)
+                {
+                    var response = await tuple.Item2.Invoke(context);
+                    if (response.IsHandled)
+                    {
+                        return true;
+                    }
+                }
+                
             }
+            
+            return await HandleGenericUpdate(context);
         }
 
         public async Task<bool> HandleCommand(IBot bot, string command, Update update)
@@ -243,6 +260,11 @@ namespace LearnBotVrk.Vkr.API
         protected void CreateCommand(string command, CommandHandler action)
         {
             Commands.Add(command, action);
+        }
+
+        protected void CreateUpdateHandler(Update.Types updateType, OptionHandler handler, Func<UpdateContext, bool> filter = null)
+        {
+            GenericHandlers.Add(new Tuple<Update.Types, CommandHandler, Func<UpdateContext, bool>>( updateType, handler, filter));
         }
     }
 }

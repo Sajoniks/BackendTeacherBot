@@ -1,82 +1,26 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace LearnBotVrk.Vkr.API
 {
     public class CourseQuiz
     {
-        public CourseQuiz()
-        {
-            InvalidAnswers = new List<int>();
-        }
-        
         public class Question
         {
+            [JsonProperty("text")] public string Text { get; private set; }
+            [JsonProperty("paragraph_id")] public string ParagraphId { get; private set; }
+            [JsonProperty("title")] public string ParagraphTitle { get; private set; }
+            [JsonProperty("options")] public string[] Options { get; private set; }
+            [JsonProperty("correct_option_num")] public int CorrectOptionNum { get; private set; }
 
-            public string Text { get; set; }
-            
-
-            public String ParagraphId { get; set; }
-
-   
-            public string[] OptionStrings { get; set; }
-            
-
-            public int CorrectOptionId { get; set; }
-            
- 
-            public string CorrectOption
-            {
-                get => OptionStrings[CorrectOptionId - 1]; 
-            }
-
-            public CourseQuiz Quiz { get; set; }
+            public string CorrectOption => Options[CorrectOptionNum - 1];
         }
-
-
-        public List<Question> Questions { get; set;  }
         
-      
-        public CourseChapter Chapter { get; set; }
-
-
-       private int CorrectAnswers { get; set; }
-      private List<int> InvalidAnswers { get; set; }
-
-        public void RegisterAnswer(Question question, string answer)
-        {
-            if (question.CorrectOption == answer)
-            {
-                ++CorrectAnswers;
-            }
-            else
-            {
-                InvalidAnswers.Add(Questions.IndexOf(question));
-            }
-        }
-
-        public bool Completed()
-        {
-            return CorrectAnswers + InvalidAnswers.Count == Questions.Count;
-        }
-
-        public class Totals
-        {
-            public int CorrectAnswers { get; set; }
-            public int IncorrectAnswers { get; set; }
-            
-            public List<string> FailedParagraphs { get; set; }
-        }
-
-        public Totals GetQuizTotals()
-        {
-            return new Totals()
-            {
-                CorrectAnswers = this.CorrectAnswers,
-                IncorrectAnswers = this.Questions.Count - this.CorrectAnswers,
-                FailedParagraphs = InvalidAnswers.Select(s => Questions[s].ParagraphId).ToList()
-            };
-        }
+        [JsonProperty("course_id")] public string CourseId { get; private set; }
+        [JsonProperty("chapter_id")] public int ChapterId { get; private set; }
+        [JsonProperty("questions")] public Question[] Questions { get; private set; }
     }
 }

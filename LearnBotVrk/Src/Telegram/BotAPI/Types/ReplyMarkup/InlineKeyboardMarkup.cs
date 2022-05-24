@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using LearnBotVrk.Telegram.BotAPI.Types.ReplyMarkup;
 using Newtonsoft.Json;
 
@@ -16,6 +17,30 @@ namespace LearnBotVrk.Telegram.BotAPI
 
         public class Builder
         {
+            public class BuilderRow
+            {
+                private Builder _builder;
+                private List<Button> _buttons;
+                internal BuilderRow(Builder builder)
+                {
+                    _builder = builder;
+                    _buttons = new List<Button>();
+                }
+
+                public BuilderRow Add(Button button)
+                {
+                    _buttons.Add(button);
+                    return this;
+                }
+
+                public Builder ToBuilder()
+                {
+                    _builder.Row(_buttons.ToArray());
+                    _buttons.Clear();
+                    return _builder;
+                }
+            }
+            
             private InlineKeyboardMarkup _keyboardMarkup;
             
             public Builder()
@@ -27,6 +52,16 @@ namespace LearnBotVrk.Telegram.BotAPI
             {
                 _keyboardMarkup._buttons.Add(buttons);
                 return this;
+            }
+
+            public Builder Row(Button button)
+            {
+                return Row(new[] { button });
+            }
+
+            public BuilderRow Row()
+            {
+                return new BuilderRow(this);
             }
 
             public InlineKeyboardMarkup Build()

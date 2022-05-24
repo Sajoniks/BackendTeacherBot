@@ -149,7 +149,7 @@ namespace LearnBotVrk.Vkr.API
             var paragraphPath = GetParagraphPath(paragraph);
             return File.ReadAllText(paragraphPath);
         }
-
+        
         public static string GetParagraphText(this CourseChapter chapter, string id)
         {
             var paragraphPath = GetParagraphPath(chapter, id);
@@ -162,12 +162,6 @@ namespace LearnBotVrk.Vkr.API
             
             var content = File.ReadAllText(quizPath);
             var quiz = Deserializer.Deserialize<CourseQuiz>(content);
-            quiz.Chapter = chapter;
-            foreach (var quizQuestion in quiz.Questions)
-            {
-                quizQuestion.Quiz = quiz;
-            }
-            
             return quiz;
         }
     }

@@ -8,11 +8,11 @@ namespace LearnBotVrk.Vkr.API
 {
     public class CourseChapter 
     {
-        [JsonProperty("id")] public int Id { get; set; }
-        [JsonIgnore] public Course Course { get; set; }
-        [JsonProperty("title")] public String Title { get; set; }
-        [JsonProperty("paragraphs")] public Collection<CourseParagraph> Paragraphs { get; set; }
-    
+        [JsonProperty("id")] public int Id { get; private set; }
+        [JsonProperty("courseId")] public String CourseId { get; private set; }
+        [JsonProperty("title")] public String Title { get; private set; }
+        [JsonProperty("paragraphs")] public Collection<CourseParagraph> Paragraphs { get; private set; }
+        [JsonProperty("completed")] public bool IsCompleted { get; private set; }
         
         public CourseParagraph GetParagraph(string id)
         {

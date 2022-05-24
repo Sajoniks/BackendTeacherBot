@@ -25,11 +25,11 @@ namespace LearnBotVrk.Vkr.API
         
         public class TeachApiConfigurableRequest : Utility.HttpConfigurableRequest
         {
-            private string _phoneNumber;
             private List<string> _formats;
-            public TeachApiConfigurableRequest(string phoneNumber, string methodName) : base("https://localhost:7079/api/", methodName)
+            private User _user;
+            public TeachApiConfigurableRequest(User user, string methodName) : base("https://localhost:7079/api/", methodName)
             {
-                _phoneNumber = phoneNumber;
+                _user = user;
                 _formats = new List<string>();
             }
 
@@ -41,9 +41,9 @@ namespace LearnBotVrk.Vkr.API
 
             protected override string BuildApiRequestUrl(StringBuilder sb)
             {
-                if (_phoneNumber != null)
+                if (_user != null)
                 {
-                    sb.Append(_phoneNumber).Append('/');
+                    sb.Append(_user.Id).Append('/');
                 }
 
                 var formatTemplate = MethodName;
@@ -95,9 +95,9 @@ namespace LearnBotVrk.Vkr.API
                 X509Chain chain,
                 SslPolicyErrors sslpolicyerrors) => true;
             
-            public static TeachApiConfigurableRequest FromMethod(MethodBase methodBase, string phoneNumber)
+            public static TeachApiConfigurableRequest FromMethod(MethodBase methodBase, User user)
             {
-                var req = new TeachApiConfigurableRequest(phoneNumber, Utility.ApiMethod.Resolve(methodBase));
+                var req = new TeachApiConfigurableRequest(user, Utility.ApiMethod.Resolve(methodBase));
 
                 {
                     bool open = false;
@@ -135,9 +135,9 @@ namespace LearnBotVrk.Vkr.API
             }
         }
 
-        public static TeachApiConfigurableRequest GetTeachApiRequest(this MethodBase methodBase, string phoneNumber)
+        public static TeachApiConfigurableRequest GetTeachApiRequest(this MethodBase methodBase, User user)
         {
-            return TeachApiConfigurableRequest.FromMethod(methodBase, phoneNumber);
+            return TeachApiConfigurableRequest.FromMethod(methodBase, user);
         }
         
         private static readonly TimeSpan FakeDelay = TimeSpan.FromMilliseconds(100);
@@ -145,19 +145,28 @@ namespace LearnBotVrk.Vkr.API
         
         public static class Users
         {
-            [Utility.ApiMethod("users/register")]
+            [Utility.ApiMethod("{user_id}/register")]
             public static Task<bool> RegisterUser(Contact contact)
             {
                 return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
-                    .PushParameters("first_name", "last_name", "phone_number", "user_id")
+                    .PushParameters("user_id", "first_name", "last_name", "phone_number")
+                    .AddParam(contact.UserId)
                     .AddParam(contact.FirstName)
                     .AddParam(contact.LastName)
                     .AddParam(contact.PhoneNumber)
-                    .AddParam(contact.UserId)
                     .GetResponseAndResult<bool>("POST");
             }
 
-            [Utility.ApiMethod("users/{user_id}")]
+            [Utility.ApiMethod("{user_id}/profile")]
+            public static Task<Collection<UserProfile.Progression>> GetProfile(User user)
+            {
+                return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
+                    .PushParameters("user_id")
+                    .AddParam(user.Id)
+                    .GetResponseAndResult<Collection<UserProfile.Progression>>();
+            }
+
+            [Utility.ApiMethod("{user_id}")]
             public static Task<bool> IsRegistered(User user)
             {
                 return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
@@ -169,7 +178,8 @@ namespace LearnBotVrk.Vkr.API
 
         public static class Courses
         {
-            public static Task<Collection<Course>> GetCoursesAsync(string id, User user)
+            [Utility.ApiMethod("{user_id}/courses")]
+            public static Task<Collection<Course>> GetCoursesAsync(User user)
             {
                 return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
                     .PushParameters("user_id")
@@ -177,7 +187,7 @@ namespace LearnBotVrk.Vkr.API
                     .GetResponseAndResult<Collection<Course>>();
             }
 
-            [Utility.ApiMethod("courses/{user_id}/{course_id}")]
+            [Utility.ApiMethod("{user_id}/courses/{course_id}")]
             public static Task<Course> GetCourseAsync(User user, string courseId)
             {
                 return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
@@ -187,16 +197,50 @@ namespace LearnBotVrk.Vkr.API
                     .GetResponseAndResult<Course>();
             }
 
-            [Utility.ApiMethod("courses/{user_id}/{course_id}/chapter/{chapter_id}/page/{par_id}")]
+            [Utility.ApiMethod("{user_id}/courses/{course_id}/chapter/{chapter_id}/page/{par_id}")]
             public static Task<string> GetParagraphTextAsync(User user, CourseParagraph paragraph)
             {
                 return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
                     .PushParameters("user_id", "course_id", "chapter_id", "par_id")
                     .AddParam(user.Id)
-                    .AddParam(paragraph.Chapter.Course.Id)
-                    .AddParam(paragraph.Chapter.Id)
+                    .AddParam(paragraph.CourseId)
+                    .AddParam(paragraph.ChapterId)
                     .AddParam(paragraph.Id)
                     .GetResponseAndResult<string>();
+            }
+
+            [Utility.ApiMethod("{user_id}/courses/{course_id}/chapter/{chapter_id}/complete")]
+            public static Task<bool> MakeProgression(User user, CourseParagraph paragraph)
+            {
+                return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
+                    .PushParameters("user_id", "course_id", "chapter_id", "paragraph")
+                    .AddParam(user.Id)
+                    .AddParam(paragraph.CourseId)
+                    .AddParam(paragraph.ChapterId)
+                    .AddParam(paragraph.Id)
+                    .GetResponseAndResult<bool>("POST");
+            }
+
+            [Utility.ApiMethod("{user_id}/courses/{course_id}/chapter/{chapter_id}/completeQuiz")]
+            public static Task<bool> MakeQuizProgression(User user, CourseQuiz quiz)
+            {
+                return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
+                    .PushParameters("user_id", "course_id", "chapter_id")
+                    .AddParam(user.Id)
+                    .AddParam(quiz.CourseId)
+                    .AddParam(quiz.ChapterId)
+                    .GetResponseAndResult<bool>("POST");
+            }
+
+            [Utility.ApiMethod("{user_id}/courses/{course_id}/chapter/{chapter_id}/quiz")]
+            public static Task<CourseQuiz> GetQuizAsync(User user, CourseChapter chapter)
+            {
+                return MethodBase.GetCurrentMethod().GetTeachApiRequest(null)
+                    .PushParameters("user_id", "course_id", "chapter_id")
+                    .AddParam(user.Id)
+                    .AddParam(chapter.CourseId)
+                    .AddParam(chapter.Id)
+                    .GetResponseAndResult<CourseQuiz>();
             }
         }
     }

@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using LearnBotVrk.Telegram.BotAPI;
 using LearnBotVrk.Telegram.BotAPI.Types;
-using LearnBotVrk.Telegram.Types;
 using LearnBotVrk.Vkr.API;
 
 namespace LearnBotVrk.Vkr.Windows
@@ -21,44 +19,176 @@ namespace LearnBotVrk.Vkr.Windows
             Quiz
         }
 
-        private CourseBrowser _courseBrowser;
+        private TelegramQuizController _quizController;
+        private TelegramCourseBrowser _courseBrowser;
         private UpdateContext _currentContext;
         private WindowState _currentState;
-        
-        private CourseQuiz _activeQuiz;
-        private int _quizQuestion;
-
-        private Message _editMessage;
-
+       
         public MainWindow() : base("С чего начнем?")
         {
             _currentState = WindowState.Idle;
-            _activeQuiz = null;
             
             CreateDefaultLayout();
 
+            // Loads course
             CreateCommand("/", HandleGenericCommand);
-        }
-
-        private void CreateReaderLayout()
-        {
-            RemoveAllOptions();
             
-            CreateOption(Option.TextOption("В оглавление 📃"), OpenCourseContents);
-            CreateOption(Option.TextOption("Пройти тест 🚀"), BeginChapterQuiz);
+            // Handle chapter selection when course browser is active
+            CreateUpdateHandler(Update.Types.CallbackQuery, HandleChapterSelection, (ctx) => _currentState == WindowState.WaitingForChapter);
+            // Handle paragraph selection when course browser is active
+            CreateUpdateHandler(Update.Types.CallbackQuery, HandleParagraphSelection, (ctx) => _currentState == WindowState.WaitingForParagraph);
+            // Handle reader states
+            CreateUpdateHandler(Update.Types.CallbackQuery, HandleReaderStateChange, (ctx)=> _currentState == WindowState.Reading);
+
+
+            // Handle polls
+            CreateUpdateHandler(Update.Types.Poll, HandlePollUpdate, (ctx) => _currentState == WindowState.Quiz);
         }
 
-        private Task<Reply> OpenCourseContents(UpdateContext arg)
+        private async Task<Reply> HandlePollUpdate(UpdateContext arg)
         {
-            return Task.FromResult<Reply>(Reply.Handled());
+            var bot = arg.Bot;
+            var update = arg.Update;
+            var poll = arg.Update.Poll;
+
+            var answ = poll.Options.FirstOrDefault(opt => opt.VotesCount > 0)?.Text;
+            _quizController.RegisterAnswer(answ);
+
+            await Task.Delay(3000);
+            if (_quizController.Completed)
+            {
+                await _quizController.SendPollTotalsAsync(bot, _currentContext.Update.Message.From, _currentContext.Update.Message.Chat);
+                _currentState = WindowState.Idle;
+            }
+            else
+            {
+                await _quizController.SendTelegramPollAsync(bot, _currentContext.Update.Message.Chat);
+            }
+
+            
+            return Reply.Handled();
         }
 
-        private Task<Reply> BeginChapterQuiz(UpdateContext arg)
+        private async Task<Reply> HandleReaderStateChange(UpdateContext arg)
         {
-            return Task.FromResult(Reply.Handled());
+            var bot = arg.Bot;
+            var update = arg.Update;
+            var cb = update.CallbackQuery;
+            var chat = cb.Message.Chat;
+
+            if (cb.Data == TelegramCourseBrowser.Constants.NextPage)
+            {
+                _courseBrowser.Reader.NextPage();
+                await _courseBrowser.SendReaderAsync(bot, chat);
+                
+                return Reply.Handled();
+            }
+
+            if (cb.Data == TelegramCourseBrowser.Constants.PrevPage)
+            {
+                _courseBrowser.Reader.PrevPage();
+                await _courseBrowser.SendReaderAsync(bot, chat);
+                
+                return Reply.Handled();
+            }
+
+            if (cb.Data == TelegramCourseBrowser.Constants.TableOfContents)
+            {
+                // read till end
+                if (!_courseBrowser.Reader.HasNext)
+                {
+                    await TeachApi.Courses.MakeProgression(cb.From, _courseBrowser.Paragraph);
+                }
+
+                await _courseBrowser.UpdateCourseStatus();
+                await _courseBrowser.SendParagraphListAsync(bot, chat);;
+                _currentState = WindowState.WaitingForParagraph;
+                
+                return Reply.Handled();
+            }
+
+            return Reply.Unhandled();
         }
-        
-        
+
+        private async Task<Reply> HandleParagraphSelection(UpdateContext arg)
+        {
+            var bot = arg.Bot;
+            var update = arg.Update;
+            var cb = update.CallbackQuery;
+            var user = cb.From;
+            var chat = cb.Message.Chat;
+
+            if (cb.Data == TelegramCourseBrowser.Constants.TableOfContents)
+            {
+                if (_courseBrowser.Chapter != null)
+                {
+                    await _courseBrowser.SendTableOfContentsAsync(arg.Bot, cb.Message.Chat);
+                    _currentState = WindowState.WaitingForChapter;
+                    return Reply.Handled();
+                }
+            }
+            else if (cb.Data == TelegramCourseBrowser.Constants.Quiz)
+            {
+                await _courseBrowser.DeleteBrowserMessage(bot, cb.Message.Chat);
+                
+                var quiz = await TeachApi.Courses.GetQuizAsync(user, _courseBrowser.Chapter);
+                _currentState = WindowState.Quiz;
+
+                _quizController = new TelegramQuizController(
+                    new QuizController(quiz)
+                );
+
+                await _quizController.SendTelegramPollAsync(bot, chat);
+
+                return Reply.Handled();
+            }
+            else
+            {
+                var paragraphId = cb.Data;
+                if (_courseBrowser.SetParagraph(paragraphId))
+                {
+                    var courseReaderTask = _courseBrowser.CreateParagraphReaderAsync();
+                    await bot.AnswerCallbackQuery(cb.Id);
+                    await courseReaderTask;
+
+                    if (_courseBrowser.Reader != null)
+                    {
+                        await _courseBrowser.SendReaderAsync(bot, cb.Message.Chat);
+                        _currentState = WindowState.Reading;
+                        return Reply.Handled();
+                    }
+                }
+            }
+
+            return Reply.Unhandled();
+        }
+
+        private async Task<Reply> HandleChapterSelection(UpdateContext arg)
+        {
+            var bot = arg.Bot;
+            var update = arg.Update;
+            var cb = update.CallbackQuery;
+
+            // goto table of contents
+            try
+            {
+                int chapterId = int.Parse(cb.Data);
+                if (_courseBrowser.SetChapter(chapterId))
+                {
+                    await _courseBrowser.SendParagraphListAsync(bot, cb.Message.Chat);
+                    _currentState = WindowState.WaitingForParagraph;
+                    return Reply.Handled();
+                }
+            }
+            catch (FormatException e)
+            {
+                // do something
+            }
+
+            await bot.SendMessageAsync(cb.Message.Chat, "Не удалось загрузить главу.");
+            return Reply.Unhandled();
+        }
+
         private void CreateDefaultLayout()
         {
             RemoveAllOptions();
@@ -68,6 +198,8 @@ namespace LearnBotVrk.Vkr.Windows
 
         protected override async Task OnEnter(UpdateContext ctx)
         {
+            _currentContext = ctx;
+            
             // check if user is registered.
             if (await TeachApi.Users.IsRegistered(ctx.Update.Message.From))
             {
@@ -75,11 +207,9 @@ namespace LearnBotVrk.Vkr.Windows
             }
             else
             {
-                _currentContext = ctx;
                 await StartWindow(new WelcomeWindow(), ctx);
             }
         }
-
         protected override async void OnIntentResult(int resultCode)
         {
             if (resultCode == 1)
@@ -89,209 +219,67 @@ namespace LearnBotVrk.Vkr.Windows
             }
         }
 
-        protected override async Task<bool> HandleGenericUpdate(UpdateContext arg)
-        {
-            if (arg.Update.Type == Update.Types.CallbackQuery)
-            {
-                var bot = arg.Bot;
-                var cb = arg.Update.CallbackQuery;
-                var message = cb.Message;
-                var user = cb.From;
-                
-                if (_currentState == WindowState.WaitingForChapter)
-                {
-                    int chapterId = int.Parse(cb.Data);
-                    if (_courseBrowser.SetChapter(chapterId))
-                    {
-                        bool allCompleted = true;
-                        // get paragraphs
-                        var markupBuilder = new InlineKeyboardMarkup.Builder();
-                        foreach (var par in _courseBrowser.Chapter.Paragraphs)
-                        {
-                            allCompleted &= par.IsCompleted;
-                            
-                            markupBuilder.Row(new[]
-                            {
-                                new InlineKeyboardMarkup.Button()
-                                    { Text = $"{(par.IsCompleted ? "✅" : "👉")} {par.Title}", CallbackData = par.Id }
-                            });
-                        }
-
-                        if (allCompleted)
-                        {
-                            markupBuilder.Row(new[]
-                            {
-                                new InlineKeyboardMarkup.Button() { CallbackData = "quiz", Text = "Пройти тест 🚀" }
-                            });
-                        }
-                        
-                        _editMessage = await bot.EditMessageTextAsync(_editMessage.Chat, _editMessage.Id,
-                            _courseBrowser.Chapter.Title, markupBuilder.Build());
-                        _currentState = WindowState.WaitingForParagraph;
-                    }
-                    else if (_editMessage != null)
-                    {
-                        await bot.EditMessageTextAsync(_editMessage.Chat, _editMessage.Id,
-                            "Не удалось загрузить главу.");
-                        _editMessage = null;
-                        _currentState = WindowState.Idle;
-                    }
-                }
-                else if (_currentState == WindowState.WaitingForParagraph || _currentState == WindowState.Reading)
-                {
-                    if (_currentState == WindowState.Reading)
-                    {
-                        var reader = _courseBrowser.Reader;
-                        var chat = _editMessage.Chat;
-                    
-                        if (cb.Data == "readerPrev")
-                        {
-                            reader.PrevPage();
-                            _editMessage = await bot.EditMessageTextAsync(chat, _editMessage.Id, reader.CurrentPage, reader.CreateMarkup());
-                            return true;
-                        }
-
-                        if (cb.Data == "readerNext")
-                        {
-                            reader.NextPage();
-                            _editMessage = await bot.EditMessageTextAsync(chat, _editMessage.Id, reader.CurrentPage, reader.CreateMarkup());
-                            return true;
-                        }
-                        
-                        await bot.DeleteMessageAsync(_editMessage.Chat, _editMessage.Id);
-                        _editMessage = cb.Message;
-                    }
-
-                    if (cb.Data == "quiz")
-                    {
-                        Chat chat = _editMessage.Chat;
-                        await bot.DeleteMessageAsync(_editMessage.Chat, _editMessage.Id);
-
-                        // _activeQuiz = _courseBrowser.Chapter.GetChapterQuiz();
-                        if (_activeQuiz != null)
-                        {
-                            _currentState = WindowState.Quiz;
-                            
-                            _quizQuestion = 0;
-                            _editMessage = await bot.CreateQuiz(chat, _activeQuiz.Questions[_quizQuestion]);
-                            return true;
-                        }
-                    }
-                    
-                    string paragraphId = cb.Data;
-                    if (await _courseBrowser.SetParagraphAsync(paragraphId))
-                    {
-                        var reader = _courseBrowser.Reader;
-                        
-                        try {await bot.AnswerCallbackQuery(cb.Id);} catch (Exception e) {}
-                        
-                        _editMessage = await bot.SendMessageAsync(_editMessage.Chat, reader.CurrentPage, reader.CreateMarkup());
-                        _currentState = WindowState.Reading;
-                    }
-                    else
-                    {
-                        await bot.EditMessageTextAsync(_editMessage.Chat, _editMessage.Id,
-                            "Не удалось загрузить параграф.");
-                        _editMessage = null;
-                        _currentState = WindowState.Idle;
-                    }
-                }
-            }
-            else if (arg.Update.Type == Update.Types.Poll)
-            {
-                var waitTask = Task.Delay(3000);
-                
-                var poll = arg.Update.Poll;
-                var question = _activeQuiz.Questions[_quizQuestion];
-
-                string selectedOption = null;
-                {
-                    var options = poll.Options;
-                    var selected = options.FirstOrDefault(o => o.VotesCount > 0);
-                    selectedOption = selected.Text;
-                }
-                
-                _activeQuiz.RegisterAnswer(_activeQuiz.Questions[_quizQuestion], selectedOption);
-
-                Chat chat = _editMessage.Chat;
-                ++_quizQuestion;
-
-                await waitTask;
-                await arg.Bot.DeleteMessageAsync(chat, _editMessage.Id);
-
-                if (_activeQuiz.Completed())
-                {
-                    var totals = _activeQuiz.GetQuizTotals();
-                    var builder = new StringBuilder("🎉Тест пройден!🎉")
-                        .AppendLine().AppendLine()
-                        .AppendLine($"Правильно отвечено: {totals.CorrectAnswers} / {_activeQuiz.Questions.Count}");
-
-                    if (totals.IncorrectAnswers > 0)
-                    {
-                        builder.AppendLine("📕 Темы которые неплохо повторить:").AppendLine();
-                        foreach (var par in totals.FailedParagraphs)
-                        {
-                            builder.AppendLine($"👉 {_activeQuiz.Chapter.GetParagraph(par).Title}");
-                        }
-                    }
-                    else
-                    {
-                        builder.AppendLine("🔥Отличная работа! Работаем дальше.");
-                    }
-
-                    await arg.Bot.SendMessageAsync(chat, builder.ToString());
-                    _currentState = WindowState.Idle;
-                }
-                else
-                {
-                    _editMessage = await arg.Bot.CreateQuiz(chat, _activeQuiz.Questions[_quizQuestion]);
-                }
-            }
-
-            return false;
-        }
-
         private async Task<Reply> HandleGenericCommand(UpdateContext arg)
         {
-            // by default we load course
-            // /course1
-            var courseBrowserTask = CourseBrowser.CreateCourseBrowserAsync(arg.Update.Message.Text, arg.Update.Message.From);
-            var responseMessage = await arg.SendBotResponse("Загрузка...");
+            var message = arg.Update.Message;
+            var chat = message.Chat;
 
-            _courseBrowser = await courseBrowserTask;
-            // Loaded
-            if (_courseBrowser != null && _courseBrowser.Course != null)
+            if (_courseBrowser != null)
             {
-                // create keyboard
-                var markupBuilder = new InlineKeyboardMarkup.Builder();
-                foreach (var chap in _courseBrowser.Course.Chapters)
-                {
-                    bool completed = chap.Paragraphs.All(p => p.IsCompleted);
-                    
-                    markupBuilder.Row(new[]
-                    {
-                        new InlineKeyboardMarkup.Button()
-                            { Text = $"{(completed ? "✅" : "👉")} Глава {chap.Id} - {chap.Title}", CallbackData = chap.Id.ToString() }
-                    });
-                }
+                await _courseBrowser.DeleteBrowserMessage(arg.Bot, chat);
+                _courseBrowser = null;
+            }
+            
+            // by default we load course
+            var courseBrowserTask = CourseBrowser.CreateCourseBrowserAsync(message.Text.Substring(1), message.From);
+            var responseTask = arg.SendBotResponse("Загрузка...");
 
-                _editMessage = await arg.Bot.EditMessageTextAsync(responseMessage.Chat, responseMessage.Id,
-                    _courseBrowser.Course.Title, markupBuilder.Build());
+            
+            var responseMessage = await responseTask;
+            var courseBrowser = await courseBrowserTask;
+            
+            
+            // Loaded
+            if (courseBrowser?.Course != null)
+            {
+                _courseBrowser = new TelegramCourseBrowser(courseBrowser, responseMessage);
+                await _courseBrowser.SendTableOfContentsAsync(arg.Bot, chat);
                 _currentState = WindowState.WaitingForChapter;
             }
             else
             {
-                await arg.Bot.EditMessageTextAsync(responseMessage.Chat, responseMessage.Id,
-                    "Не удалось загрузить курс.");
+                await arg.Bot.EditMessageTextAsync(responseMessage.Chat, responseMessage.Id, "Не удалось загрузить курс.");
                 _currentState = WindowState.Idle;
             }
 
             return Reply.Handled();
         }
 
-        private Task<Reply> PreviewProfile(UpdateContext arg)
+        private async Task<Reply> PreviewProfile(UpdateContext arg)
         {
-            return Task.FromResult(Reply.Handled());
+            var bot = arg.Bot;
+            var message = arg.Update.Message;
+            var from = message.From;
+            var chat = message.Chat;
+            
+            var profileTask = TeachApi.Users.GetProfile(from);
+            var statusMessage = await bot.SendMessageAsync(chat, "Загрузка...");
+
+            var data = await profileTask;
+
+            var sb = new StringBuilder($"👤 Профиль пользователя @{from.Username}").AppendLine().AppendLine();
+            foreach (var progression in data)
+            {
+                sb.AppendLine($"🔷 Курс \"{progression.Title}\":")
+                    .AppendLine($"   ◻ Прогресс: {Math.Round(progression.ProgressPercent * 100)}%")
+                    .AppendLine($"   ◻ Пройдено тем: {progression.DoneParagraphs}/{progression.TotalParagraphs}")
+                    .AppendLine($"   ◻ Пройдено тестов: {progression.DoneQuizes}/{progression.TotalQuizes}")
+                    .AppendLine();
+            }
+
+            await bot.EditMessageTextAsync(chat, statusMessage.Id, sb.ToString());
+            
+            return Reply.Handled();
         }
 
         private async Task<Reply> ListAvailableCourses(UpdateContext arg)

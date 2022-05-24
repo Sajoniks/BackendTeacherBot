@@ -5,10 +5,15 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LearnBotServer.Controllers;
 
-[Route("api/courses")]
+[Route("api/{userId}/courses")]
 public class CourseController : Controller
 {
-    private readonly UserContext db = new UserContext();
+    private readonly UserContext db;
+    public CourseController(UserContext ctx)
+    {
+        db = ctx;
+    }
+    
     
     [HttpPost]
     [Route("give")]
@@ -30,14 +35,17 @@ public class CourseController : Controller
     }
 
     [HttpGet]
-    [Route("{userId}/{courseId}")]
+    [Route("{courseId}")]
     public IActionResult GetCourse(long userId, string courseId)
     {
         var user = db.Users.Find(userId);
         if (user != null)
         {
             var progress = db.Progresses
-                .Where(p => p.UserId == user.Id && p.CourseId == courseId);  
+                .Where(p => p.UserId == user.Id && p.CourseId == courseId);
+
+            var quizes = db.CompletedQuises
+                .Where(p => p.UserId == user.Id && p.CourseId == courseId);
 
             var course = Resources.GetCourse(courseId);
             var chapters = course.GetCourseChapters();
@@ -46,11 +54,15 @@ public class CourseController : Controller
                 .Select(c => new
                 {
                     Id = c.Id,
+                    CourseId = course.Id,
                     Title = c.Title,
+                    Completed = quizes.Any(q => q.ChapterId == c.Id && q.CourseId == courseId),
                     Paragraphs = c.Paragraphs
                         .Select(p => new
                         {
                             Id = p.Key,
+                            CourseId = course.Id,
+                            ChapterId = c.Id,
                             Title = p.Value.Title,
                             Completed = progress.Any(prg => prg.ParagraphId == p.Key && prg.ChapterId == c.Id)
                         })
@@ -69,7 +81,7 @@ public class CourseController : Controller
     }
 
     [HttpGet]
-    [Route("{userId}/{courseId}/chapter/{chapterId}/page/{page}")]
+    [Route("{courseId}/chapter/{chapterId}/page/{page}")]
     public IActionResult GetParagraphText(long userId, string courseId, int chapterId, string page)
     {
         var user = db.Users.Find(userId);
@@ -83,5 +95,70 @@ public class CourseController : Controller
         }
 
         return Json(Response<string>.FailResponse());
+    }
+
+    [HttpPost]
+    [Route("{courseId}/chapter/{chapterId}/completeQuiz")]
+    public IActionResult AddQuiz(long userId, string courseId, int chapterId)
+    {
+        if (db.CompletedQuises.FirstOrDefault(q => q.UserId == userId) == null)
+        {
+            var progression = new UserQuiz()
+            {
+                ChapterId = chapterId,
+                CourseId = courseId,
+                UserId = userId
+            };
+
+            db.CompletedQuises.Add(progression);
+            db.SaveChanges();
+        }
+
+        return Json(Response<bool>.OkResponse(true));
+    }
+
+    [HttpPost]
+    [Route("{courseId}/chapter/{chapterId}/complete")]
+    public IActionResult AddProgression(long userId, string courseId, int chapterId, string paragraph)
+    {
+        var user = db.Users.Find(userId);
+        if (user != null)
+        {
+            var progression = new UserProgress()
+            {
+                ChapterId = chapterId,
+                CourseId = courseId,
+                ParagraphId = paragraph,
+                UserId = userId
+            };
+
+            db.Progresses.Add(progression);
+            db.SaveChanges();
+        }
+
+        return Json(Response<bool>.OkResponse(true));
+    }
+
+    [HttpGet]
+    [Route("{courseId}/chapter/{chapterId}/quiz")]
+    public IActionResult GetQuizForChapter(long userId, string courseId, int chapterId)
+    {
+        var course = Resources.GetCourse(courseId);
+        var chapter = course.GetCourseChapter(chapterId);
+        var quiz = chapter.GetChapterQuiz();
+
+        return Json( Response<dynamic>.OkResponse(new
+        {
+            course_id = course.Id,
+            chapter_id = chapter.Id,
+            questions = quiz.Questions.Select(q => new
+            {
+                text = q.Text,
+                paragraph_id = q.ParagraphId,
+                title = chapter.Paragraphs[q.ParagraphId].Title,
+                correct_option_num = q.CorrectOptionId,
+                options = q.OptionStrings,
+            })
+        }));
     }
 }

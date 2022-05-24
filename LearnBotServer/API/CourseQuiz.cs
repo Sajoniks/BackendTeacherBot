@@ -1,28 +1,31 @@
-﻿using YamlDotNet.Serialization;
+﻿using System.Text.Json.Serialization;
+using YamlDotNet.Serialization;
 
 namespace LearnBotServer.API
 {
     public class CourseQuiz
     {
-        public CourseQuiz()
-        {
-      
-        }
-        
         public class Question
         {
             [YamlMember(Alias = "text")]
-            public string Text { get; set; }
+            [JsonPropertyName("text")]
+            public string Text { get; private set; }
+            
+            [JsonPropertyName("paragraph_id")]
             [YamlMember(Alias = "page")]
-            public String ParagraphId { get; set; }
+            public String ParagraphId { get; private set; }
+            
+            [JsonPropertyName("options")]
             [YamlMember(Alias = "opts")]
-            public string[] OptionStrings { get; set; }
+            public string[] OptionStrings { get; private set; }
+            
+            [JsonPropertyName("correct_option_num")]
             [YamlMember(Alias = "correct")]
-            public int CorrectOptionId { get; set; }
-            [YamlIgnore] public CourseQuiz Quiz { get; set; }
+            public int CorrectOptionId { get; private set; }
         }
 
-        [YamlMember(Alias = "quiz")] public List<Question> Questions { get; set;  }
-        [YamlIgnore] public CourseChapter Chapter { get; set; }
+        [YamlMember(Alias = "quiz")] 
+        [JsonPropertyName("questions")]
+        public List<Question> Questions { get; private set; }
     }
 }
