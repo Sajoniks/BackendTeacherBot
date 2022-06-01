@@ -6,3 +6,4 @@ riderModule.iml
 .idea
 /LearnBotServer/botdb.db-shm
 /LearnBotServer/botdb.db-wal
+.vs
